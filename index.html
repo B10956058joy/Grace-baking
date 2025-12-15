@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Grace 的烘焙食譜</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-purple-50">
+
+    <div id="app" class="max-w-6xl mx-auto p-6">
+
+        <!-- Header -->
+         <header class="relative mb-6 rounded-lg overflow-hidden shadow-lg">
+            <img src="images/header.jpg"
+                 alt="Grace Baking Header"
+                 class="w-full h-64 object-cover">
+
+            <div class="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center">
+                <h1 class="text-4xl md:text-5xl font-bold text-white drop-shadow-lg">
+                    Grace 的烘焙食譜
+                </h1>
+            </div>
+        </header>
+
+        <!-- 過濾分類 + 搜尋 -->
+        <div class="flex flex-col sm:flex-row justify-between mb-6 gap-4">
+            <div class="flex gap-2 flex-wrap">
+                <button @click="selectedCategory = '全部'" :class="buttonClass('全部')" class="px-4 py-2 rounded shadow">全部</button>
+                <button @click="selectedCategory = '蛋糕'" :class="buttonClass('蛋糕')" class="px-4 py-2 rounded shadow">蛋糕</button>
+                <button @click="selectedCategory = '餅乾'" :class="buttonClass('餅乾')" class="px-4 py-2 rounded shadow">餅乾</button>
+                <button @click="selectedCategory = '麵包'" :class="buttonClass('麵包')" class="px-4 py-2 rounded shadow">麵包</button>
+            </div>
+            <input v-model="searchText" type="text" placeholder="搜尋食譜名稱" class="p-2 rounded border w-full sm:w-64 shadow">
+        </div>
+
+        <!-- 食譜列表 -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            <div v-for="recipe in filteredRecipes" :key="recipe.id" class="bg-white p-4 rounded-xl shadow hover:shadow-2xl transition relative">
+                <img :src="recipe.img" alt="recipe image" class="rounded-md mb-2 w-full h-40 object-cover">
+                <h2 class="text-xl font-semibold mb-1">{{ recipe.name }}</h2>
+                <p class="text-gray-700 mb-1">{{ recipe.shortDesc }}</p>
+                <p class="text-sm text-gray-500 mb-2">分類: {{ recipe.category }}</p>
+
+                <!-- 星星評分 -->
+                <div class="flex gap-1 mb-2">
+                    <span v-for="n in 5" :key="n" @click="rate(recipe, n)" class="cursor-pointer" :class="n <= recipe.rating ? 'text-yellow-400' : 'text-gray-300'">★</span>
+                </div>
+
+                <div class="flex justify-between items-center">
+                    <button @click="selectRecipe(recipe)" class="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded shadow transition">查看詳細</button>
+                    <button @click="toggleFavorite(recipe)">
+          <span v-if="recipe.favorite" class="text-red-500 text-2xl">♥</span>
+          <span v-else class="text-gray-400 text-2xl">♡</span>
+        </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 詳細內容彈窗 -->
+        <div v-if="selectedRecipe" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 transition-opacity duration-300">
+            <div class="bg-white p-6 rounded-xl shadow-lg w-11/12 md:w-2/3 max-h-[90vh] overflow-y-auto relative transform transition-transform duration-300 scale-95" :class="{'scale-100': selectedRecipe}">
+                <img :src="selectedRecipe.img" alt="recipe image" class="rounded-md mb-4 w-full h-60 object-cover">
+                <h2 class="text-3xl font-bold mb-2">{{ selectedRecipe.name }}</h2>
+                <p class="text-gray-700 mb-4">{{ selectedRecipe.shortDesc }}</p>
+
+                <!-- 人數調整 -->
+                <div class="mb-2">
+                    <label>人數: </label>
+                    <input type="number" v-model.number="portion" min="1" class="w-16 p-1 border rounded" />
+                </div>
+
+                <h3 class="font-semibold mb-1">材料:</h3>
+                <ul class="list-disc ml-6 mb-2">
+                    <li v-for="item in adjustedIngredients(selectedRecipe)" :key="item">{{ item }}</li>
+                </ul>
+
+                <h3 class="font-semibold mb-1">步驟:</h3>
+                <ol class="list-decimal ml-6 mb-4">
+                    <li v-for="step in selectedRecipe.steps" :key="step">{{ step }}</li>
+                </ol>
+
+                <div class="flex gap-2">
+                    <button @click="printRecipe(selectedRecipe)" class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded shadow transition">列印食譜</button>
+                    <button @click="closeRecipe" class="bg-gray-500 text-white px-4 py-2 rounded shadow hover:bg-gray-600 transition">關閉</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const {
+            createApp
+        } = Vue;
+
+        const recipes = [{
+                id: 1,
+                name: "巧克力蛋糕",
+                category: "蛋糕",
+                shortDesc: "濃郁巧克力風味，入口即化",
+                img: "images/01.jpg",
+                favorite: false,
+                ingredients: ["巧克力 200g", "低筋麵粉 150g", "糖 100g", "蛋 3顆", "奶油 50g"],
+                steps: ["烤箱預熱 180度", "巧克力隔水融化", "混合材料", "倒入模具烤 30 分鐘"]
+            }, {
+                id: 2,
+                name: "抹茶餅乾",
+                category: "餅乾",
+                shortDesc: "清香抹茶味，酥脆可口",
+                img: "images/02.jpg",
+                favorite: false,
+                ingredients: ["低筋麵粉 200g", "奶油 100g", "糖 80g", "抹茶粉 10g"],
+                steps: ["奶油糖打發", "加入麵粉抹茶粉", "整形烤 15 分鐘"]
+            }, {
+                id: 3,
+                name: "法國麵包",
+                category: "麵包",
+                shortDesc: "外酥內軟，傳統風味",
+                img: "images/03.jpg",
+                favorite: false,
+                ingredients: ["高筋麵粉 300g", "水 180ml", "酵母 5g", "鹽 5g"],
+                steps: ["混合材料", "揉麵", "發酵 1 小時", "烤箱烤 25 分鐘"]
+            }, {
+                id: 4,
+                name: "奶油泡芙",
+                category: "蛋糕",
+                shortDesc: "外脆內軟，香甜奶油",
+                img: "images/04.jpg",
+                favorite: false,
+                ingredients: ["低筋麵粉 100g", "奶油 80g", "蛋 2顆", "牛奶 100ml"],
+                steps: ["將奶油牛奶煮熱", "加入麵粉攪拌", "打入蛋液", "擠入烤盤烤 20 分鐘"]
+            }, {
+                id: 5,
+                name: "肉桂捲",
+                category: "麵包",
+                shortDesc: "香甜肉桂味，軟嫩可口",
+                img: "images/05.jpg",
+                favorite: false,
+                ingredients: ["高筋麵粉 250g", "糖 50g", "奶油 50g", "肉桂粉 5g", "酵母 5g"],
+                steps: ["混合材料", "揉麵發酵 1 小時", "捲成卷狀", "烤箱烤 25 分鐘"]
+            }, {
+                id: 6,
+                name: "檸檬磅蛋糕",
+                category: "蛋糕",
+                shortDesc: "酸甜清新，鬆軟可口",
+                img: "images/06.jpg",
+                favorite: false,
+                ingredients: ["低筋麵粉 150g", "糖 120g", "蛋 3顆", "奶油 100g", "檸檬汁 30ml"],
+                steps: ["烤箱預熱 170度", "奶油糖打發", "加入蛋液", "拌入麵粉與檸檬汁", "烤 40 分鐘"]
+            }, {
+                id: 7,
+                name: "巧克力曲奇",
+                category: "餅乾",
+                shortDesc: "濃郁巧克力味，外脆內軟",
+                img: "images/07.jpg",
+                favorite: false,
+                ingredients: ["低筋麵粉 200g", "奶油 100g", "糖 80g", "巧克力豆 100g", "蛋 1顆"],
+                steps: ["奶油糖打發", "加入蛋液", "拌入麵粉與巧克力豆", "烤 15 分鐘"]
+            }, {
+                id: 8,
+                name: "葡萄乾麵包",
+                category: "麵包",
+                shortDesc: "鬆軟帶香甜葡萄乾",
+                img: "images/08.jpg",
+                favorite: false,
+                ingredients: ["高筋麵粉 300g", "糖 50g", "酵母 5g", "奶油 50g", "葡萄乾 80g", "水 180ml"],
+                steps: ["混合材料", "揉麵發酵 1 小時", "整形加入葡萄乾", "烤 25 分鐘"]
+            }, {
+                id: 9,
+                name: "紅豆蛋糕",
+                category: "蛋糕",
+                shortDesc: "綿密蛋糕與甜紅豆",
+                img: "images/09.jpg",
+                favorite: false,
+                ingredients: ["低筋麵粉 150g", "糖 100g", "蛋 3顆", "奶油 80g", "紅豆餡 100g"],
+                steps: ["烤箱預熱 170度", "奶油糖打發", "加入蛋液", "拌入麵粉", "倒入紅豆餡烤 35 分鐘"]
+            }, {
+                id: 10,
+                name: "杏仁餅乾",
+                category: "餅乾",
+                shortDesc: "酥脆杏仁香",
+                img: "images/10.jpg",
+                favorite: false,
+                ingredients: ["低筋麵粉 200g", "奶油 100g", "糖 80g", "杏仁粉 20g", "蛋 1顆"],
+                steps: ["奶油糖打發", "加入蛋液", "拌入麵粉與杏仁粉", "烤 15 分鐘"]
+            }, {
+                id: 11,
+                name: "可可麵包捲",
+                category: "麵包",
+                shortDesc: "巧克力香氣濃郁的軟麵包",
+                img: "images/11.jpg",
+                favorite: false,
+                ingredients: ["高筋麵粉 300g", "糖 50g", "可可粉 20g", "奶油 50g", "酵母 5g", "水 180ml"],
+                steps: ["混合材料", "揉麵發酵 1 小時", "整形", "烤 25 分鐘"]
+            }, {
+                id: 12,
+                name: "藍莓乳酪蛋糕",
+                category: "蛋糕",
+                shortDesc: "酸甜藍莓與濃郁乳酪",
+                img: "images/12.jpg",
+                favorite: false,
+                ingredients: ["奶油乳酪 200g", "糖 80g", "蛋 3顆", "低筋麵粉 100g", "藍莓 100g"],
+                steps: ["奶油乳酪打發", "加入糖和蛋", "拌入麵粉", "倒入藍莓烤 40 分鐘"]
+            }, {
+                id: 13,
+                name: "巧克力布朗尼",
+                category: "蛋糕",
+                shortDesc: "濕潤巧克力濃郁布朗尼",
+                img: "images/13.jpg",
+                favorite: false,
+                ingredients: ["巧克力 200g", "奶油 100g", "糖 120g", "蛋 3顆", "低筋麵粉 80g"],
+                steps: ["烤箱預熱 180度", "巧克力奶油融化", "加入糖和蛋", "拌入麵粉", "烤 25 分鐘"]
+            }, {
+                id: 14,
+                name: "椰子餅乾",
+                category: "餅乾",
+                shortDesc: "香濃椰子味，酥脆可口",
+                img: "images/14.jpg",
+                favorite: false,
+                ingredients: ["低筋麵粉 200g", "奶油 100g", "糖 80g", "椰子粉 30g", "蛋 1顆"],
+                steps: ["奶油糖打發", "加入蛋液", "拌入麵粉與椰子粉", "烤 15 分鐘"]
+            }, {
+                id: 15,
+                name: "奶香吐司",
+                category: "麵包",
+                shortDesc: "軟嫩奶香，適合早餐",
+                img: "images/15.jpg",
+                favorite: false,
+                ingredients: ["高筋麵粉 300g", "糖 40g", "奶粉 20g", "奶油 30g", "酵母 5g", "水 180ml"],
+                steps: ["混合材料", "揉麵發酵 1 小時", "整形", "烤 25 分鐘"]
+            }, {
+                id: 16,
+                name: "檸檬塔",
+                category: "蛋糕",
+                shortDesc: "酸甜檸檬香氣濃郁",
+                img: "images/16.jpg",
+                favorite: false,
+                ingredients: ["塔皮材料", "檸檬汁 50ml", "糖 100g", "蛋 2顆", "奶油 50g"],
+                steps: ["製作塔皮", "烤 15 分鐘", "混合餡料", "倒入塔皮烤 25 分鐘"]
+            }, {
+                id: 17,
+                name: "巧克力碎片餅乾",
+                category: "餅乾",
+                shortDesc: "濃郁巧克力碎片酥脆口感",
+                img: "images/17.jpg",
+                favorite: false,
+                ingredients: ["低筋麵粉 200g", "奶油 100g", "糖 80g", "巧克力碎片 100g", "蛋 1顆"],
+                steps: ["奶油糖打發", "加入蛋液", "拌入麵粉與巧克力碎片", "烤 15 分鐘"]
+            }, {
+                id: 18,
+                name: "核桃麵包",
+                category: "麵包",
+                shortDesc: "軟麵包中帶香脆核桃",
+                img: "images/18.jpg",
+                favorite: false,
+                ingredients: ["高筋麵粉 300g", "糖 40g", "奶油 30g", "酵母 5g", "水 180ml", "核桃 50g"],
+                steps: ["混合材料", "揉麵發酵", "加入核桃整形", "烤 25 分鐘"]
+            }, {
+                id: 19,
+                name: "草莓奶油蛋糕",
+                category: "蛋糕",
+                shortDesc: "香甜草莓搭配奶油",
+                img: "images/19.jpg",
+                favorite: false,
+                ingredients: ["低筋麵粉 150g", "糖 100g", "蛋 3顆", "奶油 80g", "草莓 100g"],
+                steps: ["烤箱預熱 170度", "奶油糖打發", "加入蛋液", "拌入麵粉", "裝飾草莓"]
+            }, {
+                id: 20,
+                name: "巧克力餅乾",
+                category: "餅乾",
+                shortDesc: "濃郁巧克力口感",
+                img: "images/20.jpg",
+                favorite: false,
+                ingredients: ["低筋麵粉 200g", "奶油 100g", "糖 80g", "巧克力 100g", "蛋 1顆"],
+                steps: ["奶油糖打發", "加入蛋液", "拌入麵粉和巧克力", "烤 15 分鐘"]
+            }, {
+                id: 21,
+                name: "蜂蜜吐司",
+                category: "麵包",
+                shortDesc: "甜蜜蜂蜜風味軟吐司",
+                img: "images/21.jpg",
+                favorite: false,
+                ingredients: ["高筋麵粉 300g", "糖 40g", "奶油 30g", "酵母 5g", "水 180ml", "蜂蜜 30ml"],
+                steps: ["混合材料", "揉麵發酵", "整形", "烤 25 分鐘"]
+            }, {
+                id: 22,
+                name: "芒果乳酪蛋糕",
+                category: "蛋糕",
+                shortDesc: "芒果香氣與乳酪濃郁口感",
+                img: "images/22.jpg",
+                favorite: false,
+                ingredients: ["奶油乳酪 200g", "糖 80g", "蛋 3顆", "芒果泥 100g", "低筋麵粉 100g"],
+                steps: ["奶油乳酪打發", "加入糖和蛋", "拌入麵粉和芒果泥", "烤 40 分鐘"]
+            }, {
+                id: 23,
+                name: "檸檬餅乾",
+                category: "餅乾",
+                shortDesc: "清新檸檬香氣，酥脆可口",
+                img: "images/23.jpg",
+                favorite: false,
+                ingredients: ["低筋麵粉 200g", "奶油 100g", "糖 80g", "檸檬皮 5g", "蛋 1顆"],
+                steps: ["奶油糖打發", "加入蛋液", "拌入麵粉與檸檬皮", "烤 15 分鐘"]
+            }, {
+                id: 24,
+                name: "起司麵包",
+                category: "麵包",
+                shortDesc: "香濃起司風味軟麵包",
+                img: "images/24.jpg",
+                favorite: false,
+                ingredients: ["高筋麵粉 300g", "糖 40g", "奶油 30g", "酵母 5g", "水 180ml", "起司片 50g"],
+                steps: ["混合材料", "揉麵發酵", "整形加入起司", "烤 25 分鐘"]
+            }, {
+                id: 25,
+                name: "香蕉蛋糕",
+                category: "蛋糕",
+                shortDesc: "香蕉香甜濕潤蛋糕",
+                img: "images/25.jpg",
+                favorite: false,
+                ingredients: ["低筋麵粉 150g", "糖 100g", "蛋 3顆", "香蕉 100g", "奶油 80g"],
+                steps: ["烤箱預熱 170度", "奶油糖打發", "加入蛋液和香蕉泥", "拌入麵粉", "烤 40 分鐘"]
+            }, {
+                id: 26,
+                name: "椰香餅乾",
+                category: "餅乾",
+                shortDesc: "濃郁椰香，酥脆可口",
+                img: "images/26.jpg",
+                favorite: false,
+                ingredients: ["低筋麵粉 200g", "奶油 100g", "糖 80g", "椰子粉 30g", "蛋 1顆"],
+                steps: ["奶油糖打發", "加入蛋液", "拌入麵粉與椰子粉", "烤 15 分鐘"]
+            }, {
+                id: 27,
+                name: "葡萄乾吐司",
+                category: "麵包",
+                shortDesc: "香軟吐司搭配葡萄乾",
+                img: "images/27.jpg",
+                favorite: false,
+                ingredients: ["高筋麵粉 300g", "糖 40g", "奶油 30g", "酵母 5g", "水 180ml", "葡萄乾 50g"],
+                steps: ["混合材料", "揉麵發酵", "整形加入葡萄乾", "烤 25 分鐘"]
+            }, {
+                id: 28,
+                name: "抹茶蛋糕捲",
+                category: "蛋糕",
+                shortDesc: "清香抹茶與鬆軟蛋糕捲",
+                img: "images/28.jpg",
+                favorite: false,
+                ingredients: ["低筋麵粉 150g", "糖 100g", "蛋 3顆", "抹茶粉 10g", "奶油 80g"],
+                steps: ["烤箱預熱 170度", "蛋液打發", "加入糖和抹茶粉", "烤 20 分鐘", "捲起成蛋糕卷"]
+            }, {
+                id: 29,
+                name: "巧克力豆餅乾",
+                category: "餅乾",
+                shortDesc: "外脆內軟巧克力豆風味",
+                img: "images/29.jpg",
+                favorite: false,
+                ingredients: ["低筋麵粉 200g", "奶油 100g", "糖 80g", "巧克力豆 100g", "蛋 1顆"],
+                steps: ["奶油糖打發", "加入蛋液", "拌入麵粉與巧克力豆", "烤 15 分鐘"]
+            }, {
+                id: 30,
+                name: "蔓越莓麵包",
+                category: "麵包",
+                shortDesc: "酸甜蔓越莓軟麵包",
+                img: "images/30.jpg",
+                favorite: false,
+                ingredients: ["高筋麵粉 300g", "糖 40g", "奶油 30g", "酵母 5g", "水 180ml", "蔓越莓乾 50g"],
+                steps: ["混合材料", "揉麵發酵", "整形加入蔓越莓", "烤 25 分鐘"]
+            }, {
+                id: 31,
+                name: "奶酪蛋糕",
+                category: "蛋糕",
+                shortDesc: "滑順奶酪蛋糕，入口即化",
+                img: "images/31.jpg",
+                favorite: false,
+                ingredients: ["奶油乳酪 200g", "糖 80g", "蛋 3顆", "鮮奶油 100ml", "吉利丁 5g"],
+                steps: ["奶油乳酪打發", "加入糖和蛋", "拌入鮮奶油和吉利丁", "烤 35 分鐘"]
+            },
+
+        ];
+
+        createApp({
+            data() {
+                return {
+                    searchText: '',
+                    selectedCategory: '全部',
+                    selectedRecipe: null,
+                    portion: 1,
+                    recipes: JSON.parse(localStorage.getItem('recipes')) || recipes
+                }
+            },
+            computed: {
+                filteredRecipes() {
+                    return this.recipes.filter(r => {
+                        const matchCategory = this.selectedCategory === '全部' || r.category === this.selectedCategory;
+                        const matchSearch = r.name.includes(this.searchText);
+                        return matchCategory && matchSearch;
+                    });
+                }
+            },
+            methods: {
+                selectRecipe(recipe) {
+                    this.selectedRecipe = recipe;
+                    this.portion = 1;
+                },
+                closeRecipe() {
+                    this.selectedRecipe = null;
+                },
+                toggleFavorite(recipe) {
+                    recipe.favorite = !recipe.favorite;
+                    localStorage.setItem('recipes', JSON.stringify(this.recipes));
+                },
+                buttonClass(category) {
+                    return this.selectedCategory === category ? 'bg-purple-600 text-white' : 'bg-gray-200 text-gray-700';
+                },
+                rate(recipe, n) {
+                    recipe.rating = n;
+                    localStorage.setItem('recipes', JSON.stringify(this.recipes));
+                },
+                adjustedIngredients(recipe) {
+                    return recipe.ingredients.map(item => {
+                        let match = item.match(/^(\D*)(\d+)(.*)$/);
+                        if (match) {
+                            let [_, name, amount, unit] = match;
+                            let newAmount = Number(amount) * this.portion;
+                            return `${name}${newAmount}${unit}`;
+                        }
+                        return item;
+                    });
+                },
+                printRecipe(recipe) {
+                    const printWindow = window.open('', '', 'width=800,height=1000');
+                    const ingredientsHtml = this.adjustedIngredients(recipe)
+                        .map(item => `<li>${item}</li>`).join('');
+                    const stepsHtml = recipe.steps.map(step => `<li>${step}</li>`).join('');
+
+                    printWindow.document.write(`
+    <html>
+      <head>
+        <title>${recipe.name} - 列印食譜</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; line-height: 1.6; -webkit-print-color-adjust: exact; }
+          h1 { text-align: center; color: #6B46C1; }
+          h2 { color: #553C9A; margin-top: 20px; }
+          img { display: block; margin: 20px auto; max-width: 100%; border-radius: 10px; }
+          ul, ol { margin-left: 20px; }
+          li { margin-bottom: 8px; }
+          .section { margin-bottom: 30px; }
+        </style>
+      </head>
+      <body>
+        <h1>${recipe.name}</h1>
+        <img src="${recipe.img}" alt="${recipe.name}">
+        <div class="section">
+          <h2>材料 (份數: ${this.portion})</h2>
+          <ul>${ingredientsHtml}</ul>
+        </div>
+        <div class="section">
+          <h2>步驟</h2>
+          <ol>${stepsHtml}</ol>
+        </div>
+      </body>
+    </html>
+  `);
+                    printWindow.document.close();
+                    printWindow.focus();
+                    printWindow.print();
+                }
+
+            }
+        }).mount('#app');
+    </script>
+</body>
+
+</html>
